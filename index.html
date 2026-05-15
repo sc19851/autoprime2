@@ -187,7 +187,7 @@
 <body>
 
 <!-- CONFIG WARNING -->
-<div class="config-banner" id="configBanner">
+<div class="config-banner hidden" id="configBanner">
   <i class="ti ti-alert-triangle"></i>
   <span>ยังไม่ได้ตั้งค่า Supabase — กรุณาแก้ไข <code>SUPABASE_URL</code> และ <code>SUPABASE_ANON_KEY</code> ในไฟล์ index.html
   (<a href="SETUP.md" target="_blank">ดูคู่มือ</a>)</span>
@@ -400,6 +400,7 @@
 
 const SUPABASE_URL = 'https://vxkxgwyzvrfqqsmbfjfi.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_cS6RQ_1xjdzK2Jirm2lfcg_AHvCIr6s';
+
 
 // ════════════════════════════════════════════
 const IS_CONFIGURED = !SUPABASE_URL.includes('YOUR_');
