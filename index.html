@@ -182,6 +182,41 @@
       .stats-row { grid-template-columns: repeat(2,1fr); }
       .car-grid { grid-template-columns: repeat(2,1fr); }
     }
+
+    /* ── LOGIN PAGE ── */
+    .login-overlay { position:fixed; inset:0; background:var(--navy); z-index:500; display:flex; align-items:center; justify-content:center; }
+    .login-overlay.hidden { display:none; }
+    .login-box { background:var(--card); border-radius:20px; padding:40px; width:380px; max-width:95vw; box-shadow:0 24px 64px rgba(0,0,0,0.4); }
+    .login-logo { text-align:center; margin-bottom:28px; }
+    .login-logo-icon { width:56px; height:56px; background:var(--gold); border-radius:14px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:12px; }
+    .login-title { font-size:22px; font-weight:700; color:var(--text); margin-bottom:4px; }
+    .login-sub { font-size:13px; color:var(--muted); }
+    .login-tabs { display:flex; gap:6px; margin-bottom:24px; background:var(--surface); border-radius:10px; padding:4px; }
+    .login-tab { flex:1; padding:8px; border-radius:7px; text-align:center; font-size:13px; font-weight:600; cursor:pointer; border:none; background:transparent; color:var(--muted); font-family:var(--font); transition:all 0.15s; }
+    .login-tab.active { background:var(--card); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+    .login-form-row { margin-bottom:16px; }
+    .login-label { font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px; display:block; }
+    .login-input { width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; color:var(--text); background:var(--surface); font-family:var(--font); transition:border-color 0.15s; }
+    .login-input:focus { outline:none; border-color:var(--gold); background:#fff; }
+    .login-btn { width:100%; padding:13px; background:var(--navy); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; font-family:var(--font); transition:all 0.15s; margin-top:8px; }
+    .login-btn:hover { background:var(--navy2); }
+    .login-btn:disabled { opacity:0.5; cursor:not-allowed; }
+    .login-err { background:#FEE2E2; color:#991B1B; border-radius:8px; padding:10px 14px; font-size:13px; margin-top:12px; display:none; }
+    .login-err.show { display:block; }
+    .login-register-link { text-align:center; font-size:13px; color:var(--muted); margin-top:16px; }
+    .login-register-link a { color:var(--gold); font-weight:600; cursor:pointer; text-decoration:none; }
+
+    /* user badge in nav */
+    .user-badge { display:flex; align-items:center; gap:8px; }
+    .user-avatar { width:30px; height:30px; border-radius:50%; background:var(--gold); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--navy); }
+    .user-name { font-size:12px; color:rgba(255,255,255,0.8); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .user-role { font-size:10px; color:var(--gold2); }
+    .logout-btn { padding:5px 12px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid rgba(255,255,255,0.2); background:transparent; color:rgba(255,255,255,0.7); font-family:var(--font); transition:all 0.15s; }
+    .logout-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
+    .role-badge { display:inline-block; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; }
+    .role-admin { background:rgba(201,168,76,0.2); color:var(--gold); }
+    .role-user { background:rgba(59,130,246,0.15); color:#3B82F6; }
+
   </style>
 </head>
 <body>
@@ -191,6 +226,54 @@
   <i class="ti ti-alert-triangle"></i>
   <span>ยังไม่ได้ตั้งค่า Supabase — กรุณาแก้ไข <code>SUPABASE_URL</code> และ <code>SUPABASE_ANON_KEY</code> ในไฟล์ index.html
   (<a href="SETUP.md" target="_blank">ดูคู่มือ</a>)</span>
+</div>
+
+<!-- ══ LOGIN OVERLAY ══ -->
+<div class="login-overlay hidden" id="loginOverlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon"><i class="ti ti-car" style="color:#0A1628;font-size:26px"></i></div>
+      <div class="login-title">AutoPrime</div>
+      <div class="login-sub">ระบบจองและสั่งซื้อรถ</div>
+    </div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="setLoginMode('login',this)">เข้าสู่ระบบ</button>
+      <button class="login-tab" onclick="setLoginMode('register',this)">สมัครสมาชิก</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="loginForm">
+      <div class="login-form-row">
+        <label class="login-label">อีเมล</label>
+        <input class="login-input" id="lEmail" type="email" placeholder="email@example.com" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="login-form-row">
+        <label class="login-label">รหัสผ่าน</label>
+        <input class="login-input" id="lPassword" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="login-btn" id="loginBtn" onclick="doLogin()"><i class="ti ti-login"></i> เข้าสู่ระบบ</button>
+      <div class="login-err" id="loginErr"></div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="registerForm" style="display:none">
+      <div class="login-form-row">
+        <label class="login-label">ชื่อ-นามสกุล</label>
+        <input class="login-input" id="rName" type="text" placeholder="กรอกชื่อเต็ม">
+      </div>
+      <div class="login-form-row">
+        <label class="login-label">อีเมล</label>
+        <input class="login-input" id="rEmail" type="email" placeholder="email@example.com">
+      </div>
+      <div class="login-form-row">
+        <label class="login-label">รหัสผ่าน (อย่างน้อย 6 ตัว)</label>
+        <input class="login-input" id="rPassword" type="password" placeholder="••••••••">
+      </div>
+      <button class="login-btn" id="registerBtn" onclick="doRegister()"><i class="ti ti-user-plus"></i> สมัครสมาชิก</button>
+      <div class="login-err" id="registerErr"></div>
+    </div>
+  </div>
 </div>
 
 <nav class="nav">
@@ -203,9 +286,17 @@
   </div>
   <div class="nav-right">
     <div class="db-status"><div class="db-dot" id="dbDot"></div><span id="dbLabel">กำลังเชื่อมต่อ...</span></div>
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="switchPage('booking',this)"><i class="ti ti-calendar"></i> จองรถ</button>
-      <button class="nav-tab" onclick="switchPage('admin',this)"><i class="ti ti-layout-dashboard"></i> Admin</button>
+    <div class="nav-tabs" id="navTabs">
+      <button class="nav-tab active" id="navBooking" onclick="switchPage('booking',this)"><i class="ti ti-calendar"></i> จองรถ</button>
+      <button class="nav-tab" id="navAdmin" onclick="switchPage('admin',this)" style="display:none"><i class="ti ti-layout-dashboard"></i> Admin</button>
+    </div>
+    <div class="user-badge" id="userBadge" style="display:none">
+      <div class="user-avatar" id="userAvatar">U</div>
+      <div>
+        <div class="user-name" id="userName">ผู้ใช้</div>
+        <div class="user-role" id="userRoleLabel">User</div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()"><i class="ti ti-logout"></i> ออก</button>
     </div>
   </div>
 </nav>
@@ -251,13 +342,6 @@
             <option>ขาวมุก</option><option>ดำ</option><option>เงิน</option><option>แดง</option><option>น้ำเงิน</option><option>เทา</option>
           </select>
         </div>
-        <div class="form-row"><label class="form-label">Promotion</label><input class="form-input" id="fPromotion" type="text" placeholder="รหัสหรือชื่อโปรโมชัน"></div>
-        <div class="form-row"><label class="form-label">Finance (บริษัทไฟแนนซ์)</label><input class="form-input" id="fFinance" type="text" placeholder="เช่น กรุงศรี, ธ.กสิกร"></div>
-        <div class="form-2col">
-          <div class="form-row"><label class="form-label">เลขที่ PO</label><input class="form-input" id="fPO" type="text" placeholder="PO-XXXX"></div>
-          <div class="form-row"><label class="form-label">วันที่ PO หมดอายุ</label><input class="form-input" id="fPOExpiry" type="date"></div>
-        </div>
-        <div class="form-row"><label class="form-label">วันที่ส่งมอบ</label><input class="form-input" id="fDelivery" type="date"></div>
         <div class="form-row"><label class="form-label">หมายเหตุ</label><textarea class="form-input" id="fNote" rows="2" style="resize:none" placeholder="ข้อมูลเพิ่มเติม..."></textarea></div>
         <button class="submit-btn" id="submitBtn" onclick="submitBooking()"><i class="ti ti-send"></i> ยืนยันการจอง</button>
       </div>
@@ -297,7 +381,7 @@
             </div>
             <div style="overflow-x:auto">
               <table>
-                <thead><tr><th>รหัส</th><th>ลูกค้า</th><th>รถ</th><th>ประเภท</th><th>Promotion</th><th>Finance</th><th>PO / หมดอายุ</th><th>ส่งมอบ</th><th>วันที่จอง</th><th>สถานะ</th><th>ดำเนินการ</th></tr></thead>
+                <thead><tr><th>รหัส</th><th>ลูกค้า</th><th>รถ</th><th>ประเภท</th><th>วันที่</th><th>สถานะ</th><th>ดำเนินการ</th></tr></thead>
                 <tbody id="bookingTable"><tr><td colspan="7" style="text-align:center;padding:36px;color:var(--muted)">กำลังโหลด...</td></tr></tbody>
               </table>
             </div>
@@ -410,6 +494,100 @@ const SUPABASE_KEY = 'sb_publishable_cS6RQ_1xjdzK2Jirm2lfcg_AHvCIr6s';
 
 
 // ════════════════════════════════════════════
+// ════════════════════════════════════════════
+//  AUTH STATE
+// ════════════════════════════════════════════
+let currentUser = null;
+let currentRole = null; // 'admin' | 'user'
+
+// ── LOGIN / REGISTER UI ──
+function setLoginMode(mode, el) {
+  document.querySelectorAll('.login-tab').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('loginForm').style.display = mode==='login'?'':'none';
+  document.getElementById('registerForm').style.display = mode==='register'?'':'none';
+}
+
+async function doLogin() {
+  const email = document.getElementById('lEmail').value.trim();
+  const pass  = document.getElementById('lPassword').value;
+  const btn   = document.getElementById('loginBtn');
+  const err   = document.getElementById('loginErr');
+  if(!email||!pass){showLoginErr(err,'กรุณากรอกอีเมลและรหัสผ่าน');return;}
+  btn.disabled=true; btn.textContent='กำลังเข้าสู่ระบบ...';
+  try {
+    const {data,error} = await sbClient.auth.signInWithPassword({email,password:pass});
+    if(error) throw error;
+    await afterLogin(data.user);
+  } catch(e) {
+    showLoginErr(err, e.message==='Invalid login credentials'?'อีเมลหรือรหัสผ่านไม่ถูกต้อง':e.message);
+  }
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-login"></i> เข้าสู่ระบบ';
+}
+
+async function doRegister() {
+  const name  = document.getElementById('rName').value.trim();
+  const email = document.getElementById('rEmail').value.trim();
+  const pass  = document.getElementById('rPassword').value;
+  const btn   = document.getElementById('registerBtn');
+  const err   = document.getElementById('registerErr');
+  if(!name||!email||!pass){showLoginErr(err,'กรุณากรอกข้อมูลให้ครบ');return;}
+  if(pass.length<6){showLoginErr(err,'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');return;}
+  btn.disabled=true; btn.textContent='กำลังสมัคร...';
+  try {
+    const {data,error} = await sbClient.auth.signUp({
+      email, password:pass,
+      options:{data:{full_name:name, role:'user'}}
+    });
+    if(error) throw error;
+    showLoginErr(err,'✅ สมัครสมาชิกสำเร็จ! กรุณาตรวจสอบอีเมลเพื่อยืนยัน แล้วกลับมา Login','#D1FAE5','#065F46');
+  } catch(e) {
+    showLoginErr(err, e.message);
+  }
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-user-plus"></i> สมัครสมาชิก';
+}
+
+async function doLogout() {
+  await sbClient.auth.signOut();
+  currentUser=null; currentRole=null;
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('userBadge').style.display='none';
+  document.getElementById('navAdmin').style.display='none';
+  document.getElementById('lEmail').value='';
+  document.getElementById('lPassword').value='';
+}
+
+async function afterLogin(user) {
+  currentUser = user;
+  // ดึง role จาก user_metadata หรือ profiles table
+  const meta = user.user_metadata || {};
+  // เช็ค profiles table ก่อน (Admin กำหนดสิทธิ์ได้)
+  const {data:profile} = await sbClient.from('profiles').select('role').eq('id',user.id).single();
+  currentRole = profile?.role || meta.role || 'user';
+
+  // ซ่อน login overlay
+  document.getElementById('loginOverlay').classList.add('hidden');
+
+  // แสดง user badge
+  const badge = document.getElementById('userBadge');
+  badge.style.display='flex';
+  const nameStr = meta.full_name || user.email.split('@')[0];
+  document.getElementById('userName').textContent = nameStr;
+  document.getElementById('userAvatar').textContent = nameStr[0].toUpperCase();
+  document.getElementById('userRoleLabel').textContent = currentRole==='admin'?'🔑 Admin':'👤 User';
+
+  // แสดง/ซ่อน Admin tab
+  document.getElementById('navAdmin').style.display = currentRole==='admin'?'':'none';
+
+  // โหลดข้อมูล
+  await loadAll();
+}
+
+function showLoginErr(el, msg, bg='#FEE2E2', color='#991B1B') {
+  el.textContent=msg; el.style.background=bg; el.style.color=color;
+  el.classList.add('show');
+}
+
 const IS_CONFIGURED = !SUPABASE_URL.includes('YOUR_');
 let sbClient = null;
 let CARS = [], bookings = [], allRows = [];
@@ -430,7 +608,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('configBanner').classList.add('hidden');
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
   sbClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-  await loadAll();
+
+  // เช็ค session ที่มีอยู่
+  const {data:{session}} = await sbClient.auth.getSession();
+  if(session?.user) {
+    await afterLogin(session.user);
+  } else {
+    document.getElementById('loginOverlay').classList.remove('hidden');
+    hideLoading();
+  }
+
+  // ฟัง Auth state change
+  sbClient.auth.onAuthStateChange(async (event, session) => {
+    if(event==='SIGNED_IN' && session?.user) {
+      // handled by afterLogin
+    } else if(event==='SIGNED_OUT') {
+      currentUser=null; currentRole=null;
+    }
+  });
 });
 
 async function loadAll() {
@@ -505,9 +700,6 @@ async function dbSaveBooking(b) {
     car_id: b.car_id, car_name: b.car,
     customer_name: b.name, phone: b.phone, email: b.email,
     booking_date: b.date, color: b.color, note: b.note,
-    promotion: b.promotion||null, finance: b.finance||null,
-    po_number: b.po_number||null, po_expiry: b.po_expiry||null,
-    delivery_date: b.delivery_date||null,
     booking_type: b.type, status: 'รอดำเนินการ'
   });
   if (error) throw error;
@@ -617,11 +809,6 @@ async function submitBooking() {
       car_id: selectedCar.id, car: selectedCar.name,
       name, phone, email: document.getElementById('fEmail').value,
       date, color: document.getElementById('fColor').value||'ไม่ระบุ',
-      promotion: document.getElementById('fPromotion').value,
-      finance: document.getElementById('fFinance').value,
-      po_number: document.getElementById('fPO').value,
-      po_expiry: document.getElementById('fPOExpiry').value||null,
-      delivery_date: document.getElementById('fDelivery').value||null,
       note: document.getElementById('fNote').value, type: bookingType
     });
     await loadBookings();
@@ -634,7 +821,7 @@ async function submitBooking() {
 }
 
 function clearForm() {
-  ['fName','fPhone','fEmail','fDate','fColor','fPromotion','fFinance','fPO','fPOExpiry','fDelivery','fNote'].forEach(id=>document.getElementById(id).value='');
+  ['fName','fPhone','fEmail','fDate','fColor','fNote'].forEach(id=>document.getElementById(id).value='');
   selectedCar = null;
   document.querySelectorAll('.car-card').forEach(c=>c.classList.remove('selected'));
   document.getElementById('selectedInfo').classList.remove('show');
@@ -708,12 +895,11 @@ function renderCarStats() {
 
 function exportCSV() {
   if(!bookings.length){showToast('ยังไม่มีรายการ',true);return;}
-  const header=['รหัส','ชื่อ','เบอร์','อีเมล','รถ','ประเภท','สี','Promotion','Finance','เลขที่ PO','PO หมดอายุ','วันที่ส่งมอบ','วันที่จอง','สถานะ','หมายเหตุ'];
+  const header=['รหัส','ชื่อ','เบอร์','อีเมล','รถ','ประเภท','สี','วันที่','สถานะ','หมายเหตุ'];
   const rows=bookings.map(b=>[
     b.id, b.customer_name||b.name, b.phone, b.email||'',
     b.car||b.car_name, b.booking_type||b.type, b.color||'',
-    b.promotion||'', b.finance||'', b.po_number||'', b.po_expiry||'',
-    b.delivery_date||'', b.booking_date||b.date, b.status, b.note||''
+    b.booking_date||b.date, b.status, b.note||''
   ].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));
   const csv='\uFEFF'+[header,...rows].map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');
@@ -819,6 +1005,7 @@ function closeModal() { document.getElementById('confirmModal').classList.remove
 
 // ── NAV ──
 function switchPage(p, el) {
+  if(p==='admin' && currentRole!=='admin'){showToast('คุณไม่มีสิทธิ์เข้าถึงหน้า Admin',true);return;}
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active'); el.classList.add('active');
