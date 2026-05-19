@@ -217,6 +217,47 @@
     .role-admin { background:rgba(201,168,76,0.2); color:var(--gold); }
     .role-user { background:rgba(59,130,246,0.15); color:#3B82F6; }
 
+
+    /* ── CUSTOM DATE INPUT ── */
+    .date-wrapper { position: relative; }
+    .date-display {
+      width: 100%; padding: 9px 36px 9px 12px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 14px; color: var(--text); background: var(--surface);
+      font-family: var(--font); cursor: pointer; transition: border-color 0.15s;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .date-display:hover, .date-display.active { border-color: var(--gold); background: #fff; }
+    .date-display .placeholder { color: var(--muted); }
+    .date-display .cal-icon { color: var(--muted); font-size: 16px; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+    .date-hidden { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+    .date-picker-pop {
+      position: absolute; top: calc(100% + 4px); left: 0; z-index: 50;
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 14px; width: 280px; display: none;
+    }
+    .date-picker-pop.open { display: block; }
+    .dp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .dp-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .dp-nav { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 4px 8px; border-radius: 6px; }
+    .dp-nav:hover { background: var(--surface); color: var(--text); }
+    .dp-weekdays { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; margin-bottom: 4px; }
+    .dp-wd { text-align: center; font-size: 11px; font-weight: 600; color: var(--muted); padding: 4px 0; }
+    .dp-days { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; }
+    .dp-day {
+      text-align: center; font-size: 13px; padding: 6px 2px; border-radius: 6px;
+      cursor: pointer; color: var(--text); transition: all 0.1s;
+    }
+    .dp-day:hover:not(.empty):not(.selected) { background: var(--surface); }
+    .dp-day.empty { cursor: default; }
+    .dp-day.today { color: var(--gold); font-weight: 700; }
+    .dp-day.selected { background: var(--navy); color: #fff; font-weight: 600; }
+    .dp-month-row { display: flex; gap: 6px; margin-bottom: 8px; }
+    .dp-month-sel, .dp-year-sel {
+      flex: 1; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 13px; font-family: var(--font); background: var(--surface); color: var(--text);
+      cursor: pointer; appearance: none; text-align: center;
+    }
+
   </style>
 </head>
 <body>
@@ -338,7 +379,13 @@
           <div class="form-row"><label class="form-label">เบอร์โทรศัพท์ *</label><input class="form-input" id="fPhone" type="tel" placeholder="08X-XXX-XXXX"></div>
           <div class="form-row"><label class="form-label">อีเมล</label><input class="form-input" id="fEmail" type="email" placeholder="email@example.com"></div>
         </div>
-        <div class="form-row"><label class="form-label">วันที่ต้องการ *</label><input class="form-input" id="fDate" type="date"></div>
+        <div class="form-row"><label class="form-label">วันที่ต้องการ *</label>
+          <div class="date-wrapper" id="dw_fDate">
+            <div class="date-display" onclick="dpOpen('fDate')" id="dd_fDate"><span class="placeholder" id="dt_fDate">วว/ดด/ปปปป</span><i class="ti ti-calendar cal-icon"></i></div>
+            <input type="hidden" id="fDate">
+            <div class="date-picker-pop" id="dp_fDate"></div>
+          </div>
+        </div>
         <div class="form-row">
           <label class="form-label">สี</label>
           <select class="form-input form-select" id="fColor">
@@ -347,12 +394,41 @@
           </select>
         </div>
         <div class="form-row"><label class="form-label">Promotion</label><input class="form-input" id="fPromotion" type="text" placeholder="รหัสหรือชื่อโปรโมชัน"></div>
-        <div class="form-row"><label class="form-label">Finance (บริษัทไฟแนนซ์)</label><input class="form-input" id="fFinance" type="text" placeholder="เช่น กรุงศรี, ธ.กสิกร"></div>
+        <div class="form-row"><label class="form-label">Finance (บริษัทไฟแนนซ์)</label>
+          <select class="form-input form-select" id="fFinance">
+            <option value="">-- เลือกไฟแนนซ์ --</option>
+            <option>กรุงศรี ออโต้</option>
+            <option>ธ.กสิกรไทย</option>
+            <option>ธ.กรุงไทย</option>
+            <option>ธ.ไทยพาณิชย์</option>
+            <option>ธ.กรุงเทพ</option>
+            <option>ธ.ทหารไทยธนชาต</option>
+            <option>Toyota Leasing</option>
+            <option>Honda Leasing</option>
+            <option>Isuzu Leasing</option>
+            <option>TISCO</option>
+            <option>MFC</option>
+            <option>ออมทรัพย์ตัวเอง</option>
+            <option>อื่นๆ</option>
+          </select>
+        </div>
         <div class="form-2col">
           <div class="form-row"><label class="form-label">เลขที่ PO</label><input class="form-input" id="fPO" type="text" placeholder="PO-XXXX"></div>
-          <div class="form-row"><label class="form-label">วันที่ PO หมดอายุ</label><input class="form-input" id="fPOExpiry" type="date"></div>
+          <div class="form-row"><label class="form-label">วันที่ PO หมดอายุ</label>
+            <div class="date-wrapper" id="dw_fPOExpiry">
+              <div class="date-display" onclick="dpOpen('fPOExpiry')" id="dd_fPOExpiry"><span class="placeholder" id="dt_fPOExpiry">วว/ดด/ปปปป</span><i class="ti ti-calendar cal-icon"></i></div>
+              <input type="hidden" id="fPOExpiry">
+              <div class="date-picker-pop" id="dp_fPOExpiry"></div>
+            </div>
+          </div>
         </div>
-        <div class="form-row"><label class="form-label">วันที่ส่งมอบ</label><input class="form-input" id="fDelivery" type="date"></div>
+        <div class="form-row"><label class="form-label">วันที่ส่งมอบ</label>
+          <div class="date-wrapper" id="dw_fDelivery">
+            <div class="date-display" onclick="dpOpen('fDelivery')" id="dd_fDelivery"><span class="placeholder" id="dt_fDelivery">วว/ดด/ปปปป</span><i class="ti ti-calendar cal-icon"></i></div>
+            <input type="hidden" id="fDelivery">
+            <div class="date-picker-pop" id="dp_fDelivery"></div>
+          </div>
+        </div>
         <div class="form-row"><label class="form-label">หมายเหตุ</label><textarea class="form-input" id="fNote" rows="2" style="resize:none" placeholder="ข้อมูลเพิ่มเติม..."></textarea></div>
         <button class="submit-btn" id="submitBtn" onclick="submitBooking()"><i class="ti ti-send"></i> ยืนยันการจอง</button>
       </div>
@@ -505,6 +581,104 @@ const SUPABASE_KEY = 'sb_publishable_cS6RQ_1xjdzK2Jirm2lfcg_AHvCIr6s';
 
 
 // ════════════════════════════════════════════
+
+// ════════════════════════════════════════════
+//  CUSTOM DATE PICKER (DD/MM/YYYY)
+// ════════════════════════════════════════════
+const DP_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const DP_WD = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+let dpState = {}; // {fieldId: {year,month,open}}
+
+function dpOpen(fieldId) {
+  // ปิด picker อื่น
+  Object.keys(dpState).forEach(k=>{ if(k!==fieldId) dpClose(k); });
+  const pop = document.getElementById('dp_'+fieldId);
+  const val = document.getElementById(fieldId).value;
+  const today = new Date();
+  if(!dpState[fieldId]) {
+    dpState[fieldId] = {year: today.getFullYear(), month: today.getMonth()};
+  }
+  if(val) {
+    const [y,m] = val.split('-');
+    dpState[fieldId] = {year:parseInt(y), month:parseInt(m)-1};
+  }
+  pop.classList.toggle('open');
+  if(pop.classList.contains('open')) dpRender(fieldId);
+}
+
+function dpClose(fieldId) {
+  const pop = document.getElementById('dp_'+fieldId);
+  if(pop) pop.classList.remove('open');
+}
+
+function dpRender(fieldId) {
+  const s = dpState[fieldId];
+  const pop = document.getElementById('dp_'+fieldId);
+  const curVal = document.getElementById(fieldId).value;
+  const today = new Date();
+  const firstDay = new Date(s.year, s.month, 1).getDay();
+  const daysInMonth = new Date(s.year, s.month+1, 0).getDate();
+
+  // Year options (ค.ศ. แสดงเป็น พ.ศ.)
+  let yearOpts = '';
+  for(let y=today.getFullYear()-2; y<=today.getFullYear()+5; y++) {
+    yearOpts += `<option value="${y}" ${y===s.year?'selected':''}>${y+543}</option>`;
+  }
+  let monthOpts = DP_MONTHS.map((m,i)=>`<option value="${i}" ${i===s.month?'selected':''}>${m}</option>`).join('');
+
+  let days = '';
+  for(let i=0;i<firstDay;i++) days += '<div class="dp-day empty"></div>';
+  for(let d=1;d<=daysInMonth;d++) {
+    const dateStr = `${s.year}-${String(s.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = d===today.getDate()&&s.month===today.getMonth()&&s.year===today.getFullYear();
+    const isSel = dateStr===curVal;
+    days += `<div class="dp-day ${isToday?'today':''} ${isSel?'selected':''}" onclick="dpSelect('${fieldId}','${dateStr}')">${d}</div>`;
+  }
+
+  pop.innerHTML = `
+    <div class="dp-header">
+      <button class="dp-nav" onclick="dpMove('${fieldId}',-1)"><i class="ti ti-chevron-left"></i></button>
+      <div class="dp-title">${DP_MONTHS[s.month]} ${s.year+543}</div>
+      <button class="dp-nav" onclick="dpMove('${fieldId}',1)"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="dp-month-row">
+      <select class="dp-month-sel" onchange="dpSetMonth('${fieldId}',this.value)">${monthOpts}</select>
+      <select class="dp-year-sel" onchange="dpSetYear('${fieldId}',this.value)">${yearOpts}</select>
+    </div>
+    <div class="dp-weekdays">${DP_WD.map(w=>`<div class="dp-wd">${w}</div>`).join('')}</div>
+    <div class="dp-days">${days}</div>
+  `;
+}
+
+function dpMove(fieldId, dir) {
+  const s = dpState[fieldId];
+  s.month += dir;
+  if(s.month>11){s.month=0;s.year++;}
+  if(s.month<0){s.month=11;s.year--;}
+  dpRender(fieldId);
+}
+
+function dpSetMonth(fieldId, m) { dpState[fieldId].month=parseInt(m); dpRender(fieldId); }
+function dpSetYear(fieldId, y) { dpState[fieldId].year=parseInt(y); dpRender(fieldId); }
+
+function dpSelect(fieldId, dateStr) {
+  document.getElementById(fieldId).value = dateStr;
+  const [y,m,d] = dateStr.split('-');
+  const display = `${d}/${m}/${parseInt(y)+543}`;
+  const dt = document.getElementById('dt_'+fieldId);
+  dt.textContent = display;
+  dt.className = '';
+  document.getElementById('dd_'+fieldId).classList.remove('active');
+  dpClose(fieldId);
+}
+
+// ปิด picker เมื่อคลิกที่อื่น
+document.addEventListener('click', e => {
+  if(!e.target.closest('.date-wrapper')) {
+    Object.keys(dpState).forEach(k=>dpClose(k));
+  }
+});
+
 // ════════════════════════════════════════════
 //  AUTH STATE
 // ════════════════════════════════════════════
@@ -847,6 +1021,7 @@ async function submitBooking() {
 
 function clearForm() {
   ['fName','fPhone','fEmail','fDate','fColor','fPromotion','fFinance','fPO','fPOExpiry','fDelivery','fNote'].forEach(id=>document.getElementById(id).value='');
+  ['fDate','fPOExpiry','fDelivery'].forEach(id=>{const el=document.getElementById('dt_'+id);if(el){el.textContent='วว/ดด/ปปปป';el.className='placeholder';};});
   selectedCar = null;
   document.querySelectorAll('.car-card').forEach(c=>c.classList.remove('selected'));
   document.getElementById('selectedInfo').classList.remove('show');
