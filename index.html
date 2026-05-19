@@ -6,6 +6,9 @@
   <title>AutoPrime — ระบบจองและสั่งซื้อรถ</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   
+  <!-- โหลด Supabase แบบ Script ปกติ ผ่าน unpkg (เพื่อแก้ปัญหาโดนบล็อก jsdelivr) -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -245,8 +248,8 @@
     <!-- LOGIN FORM -->
     <div id="loginForm">
       <div class="login-form-row">
-        <label class="login-label"><i class="ti ti-user"></i> Username</label>
-        <input class="login-input" id="lUsername" type="text" placeholder="กรอก Username" onkeydown="if(event.key==='Enter')doLogin()">
+        <label class="login-label"><i class="ti ti-user"></i> Username หรือ Email</label>
+        <input class="login-input" id="lUsername" type="text" placeholder="กรอก Username หรือ Email" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
       <div class="login-form-row">
         <label class="login-label">รหัสผ่าน</label>
@@ -493,24 +496,12 @@
 <div class="toast" id="toast"><i class="ti ti-circle-check" id="toastIcon"></i> <span id="toastMsg"></span></div>
 
 <script>
-// ════════════════════════════════════════════
-//  ⚙️  ตั้งค่า Supabase ที่นี่
-//  1. สมัคร https://supabase.com (ฟรี)
-//  2. สร้าง Project ใหม่
-//  3. ไปที่ Settings → API → คัดลอก URL และ anon key
-// ════════════════════════════════════════════
-
 const SUPABASE_URL = 'https://vxkxgwyzvrfqqsmbfjfi.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_cS6RQ_1xjdzK2Jirm2lfcg_AHvCIr6s';
 
-// ════════════════════════════════════════════
-// ════════════════════════════════════════════
-//  AUTH STATE
-// ════════════════════════════════════════════
 let currentUser = null;
-let currentRole = null; // 'admin' | 'user'
+let currentRole = null; 
 
-// ── LOGIN / REGISTER UI ──
 function setLoginMode(mode, el) {
   document.querySelectorAll('.login-tab').forEach(x=>x.classList.remove('active'));
   el.classList.add('active');
@@ -519,20 +510,24 @@ function setLoginMode(mode, el) {
 }
 
 async function doLogin() {
-  const username = document.getElementById('lUsername').value.trim();
+  const emailInput = document.getElementById('lUsername').value.trim();
   const pass  = document.getElementById('lPassword').value;
   const btn   = document.getElementById('loginBtn');
   const err   = document.getElementById('loginErr');
-  if(!username||!pass){showLoginErr(err,'กรุณากรอก Username และรหัสผ่าน');return;}
+  if(!emailInput||!pass){showLoginErr(err,'กรุณากรอกข้อมูลให้ครบถ้วน');return;}
   btn.disabled=true; btn.textContent='กำลังเข้าสู่ระบบ...';
   try {
-    const {data:prof,error:pErr} = await sbClient.from('profiles').select('email').eq('username',username).single();
-    if(pErr||!prof){showLoginErr(err,'ไม่พบ Username นี้ในระบบ');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> เข้าสู่ระบบ';return;}
-    const {data,error} = await sbClient.auth.signInWithPassword({email:prof.email,password:pass});
+    let targetEmail = emailInput;
+    if (!emailInput.includes('@')) {
+      const {data:prof} = await sbClient.from('profiles').select('email').eq('username',emailInput).single();
+      if(prof) { targetEmail = prof.email; } 
+      else { showLoginErr(err,'ไม่พบ Username นี้ในระบบ'); btn.disabled=false; btn.innerHTML='<i class="ti ti-login"></i> เข้าสู่ระบบ'; return; }
+    }
+    const {data,error} = await sbClient.auth.signInWithPassword({email:targetEmail,password:pass});
     if(error) throw error;
     await afterLogin(data.user);
   } catch(e) {
-    showLoginErr(err, e.message==='Invalid login credentials'?'Username หรือรหัสผ่านไม่ถูกต้อง':e.message);
+    showLoginErr(err, e.message==='Invalid login credentials'?'ข้อมูลเข้าสู่ระบบไม่ถูกต้อง':e.message);
   }
   btn.disabled=false; btn.innerHTML='<i class="ti ti-login"></i> เข้าสู่ระบบ';
 }
@@ -568,7 +563,7 @@ async function doLogout() {
   document.getElementById('loginOverlay').classList.remove('hidden');
   document.getElementById('userBadge').style.display='none';
   document.getElementById('navAdmin').style.display='none';
-  document.getElementById('lEmail').value='';
+  document.getElementById('lUsername').value='';
   document.getElementById('lPassword').value='';
 }
 
@@ -577,7 +572,6 @@ async function afterLogin(user) {
   const meta = user.user_metadata || {};
   const {data:profile} = await sbClient.from('profiles').select('role').eq('id',user.id).single();
   
-  // 👉 แก้ไข: บังคับให้เป็น 'admin' เสมอ เพื่อปลดล็อกหน้า Dashboard 
   currentRole = 'admin'; 
 
   document.getElementById('loginOverlay').classList.add('hidden');
@@ -586,10 +580,7 @@ async function afterLogin(user) {
   const nameStr = profile?.username || profile?.full_name || meta.username || user.email.split('@')[0];
   document.getElementById('userName').textContent = nameStr;
   document.getElementById('userAvatar').textContent = nameStr[0].toUpperCase();
-  
-  // แสดงคำว่า Admin เสมอ
   document.getElementById('userRoleLabel').textContent = '🔑 Admin (Unlocked)';
-
   document.getElementById('navAdmin').style.display = currentRole==='admin'?'':'none';
 
   await loadAll();
@@ -619,8 +610,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   document.getElementById('configBanner').classList.add('hidden');
-  const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
-  sbClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+  
+  // 👉 ใช้ Client ผ่านตัวแปร Global จาก unpkg แบบ Sync
+  sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   const {data:{session}} = await sbClient.auth.getSession();
   if(session?.user) {
@@ -652,382 +644,66 @@ async function loadAll() {
   hideLoading();
 }
 
-// ── DB STATUS ──
 function setDbStatus(state, label) {
   const dot = document.getElementById('dbDot'), lbl = document.getElementById('dbLabel');
   dot.className = 'db-dot' + (state==='ok'?' ok':state==='error'?' err':'');
   lbl.textContent = label;
 }
 
-function showLoading(msg='กำลังบันทึก...') {
-  document.getElementById('loadingText').textContent = msg;
-  document.getElementById('loadingOverlay').classList.remove('hidden');
-}
+function showLoading(msg='กำลังบันทึก...') { document.getElementById('loadingText').textContent = msg; document.getElementById('loadingOverlay').classList.remove('hidden'); }
 function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }
 
-// CARS
-async function loadCars() {
-  const { data, error } = await sbClient.from('cars').select('*').order('created_at');
-  if (error) throw error;
-  CARS = data || [];
-  renderCars(); renderCarMgmt();
-}
+async function loadCars() { const { data, error } = await sbClient.from('cars').select('*').order('created_at'); if (error) throw error; CARS = data || []; renderCars(); renderCarMgmt(); }
+async function dbSaveCar(car) { if (car.id) { const { error } = await sbClient.from('cars').update({ name: car.name, type: car.type, price: car.price, emoji: car.emoji, image_url: car.image_url }).eq('id', car.id); if (error) throw error; } else { const { error } = await sbClient.from('cars').insert({ name: car.name, type: car.type, price: car.price, emoji: car.emoji, image_url: car.image_url }); if (error) throw error; } }
+async function dbDeleteCar(id) { const { error } = await sbClient.from('cars').delete().eq('id', id); if (error) throw error; }
 
-async function dbSaveCar(car) {
-  if (car.id) {
-    const { error } = await sbClient.from('cars').update({
-      name: car.name, type: car.type, price: car.price, emoji: car.emoji, image_url: car.image_url
-    }).eq('id', car.id);
-    if (error) throw error;
-  } else {
-    const { error } = await sbClient.from('cars').insert({
-      name: car.name, type: car.type, price: car.price, emoji: car.emoji, image_url: car.image_url
-    });
-    if (error) throw error;
-  }
-}
+async function loadBookings() { const { data, error } = await sbClient.from('bookings').select('*, cars(name, price)').order('created_at', { ascending: false }); if (error) throw error; bookings = (data || []).map(b => ({...b, car: b.cars?.name || b.car_name, carPrice: b.cars?.price || 0})); updateAdminStats(); renderTable(bookings); }
+async function dbSaveBooking(b) { const { error } = await sbClient.from('bookings').insert({ car_id: b.car_id, car_name: b.car, customer_name: b.name, phone: b.phone, email: b.email, booking_date: b.date, color: b.color, note: b.note, promotion: b.promotion||null, finance: b.finance||null, po_number: b.po_number||null, po_expiry: b.po_expiry||null, delivery_date: b.delivery_date||null, booking_type: b.type, status: 'รอดำเนินการ' }); if (error) throw error; }
+async function dbUpdateStatus(id, status) { const { error } = await sbClient.from('bookings').update({ status }).eq('id', id); if (error) throw error; }
 
-async function dbDeleteCar(id) {
-  const { error } = await sbClient.from('cars').delete().eq('id', id);
-  if (error) throw error;
-}
-
-// BOOKINGS
-async function loadBookings() {
-  const { data, error } = await sbClient.from('bookings')
-    .select('*, cars(name, price)').order('created_at', { ascending: false });
-  if (error) throw error;
-  bookings = (data || []).map(b => ({...b, car: b.cars?.name || b.car_name, carPrice: b.cars?.price || 0}));
-  updateAdminStats(); renderTable(bookings);
-}
-
-async function dbSaveBooking(b) {
-  const { error } = await sbClient.from('bookings').insert({
-    car_id: b.car_id, car_name: b.car,
-    customer_name: b.name, phone: b.phone, email: b.email,
-    booking_date: b.date, color: b.color, note: b.note,
-    promotion: b.promotion||null, finance: b.finance||null,
-    po_number: b.po_number||null, po_expiry: b.po_expiry||null,
-    delivery_date: b.delivery_date||null,
-    booking_type: b.type, status: 'รอดำเนินการ'
-  });
-  if (error) throw error;
-}
-
-async function dbUpdateStatus(id, status) {
-  const { error } = await sbClient.from('bookings').update({ status }).eq('id', id);
-  if (error) throw error;
-}
-
-async function uploadImageToStorage(file) {
-  const ext = file.name.split('.').pop();
-  const path = `cars/${Date.now()}.${ext}`;
-  const { error } = await sbClient.storage.from('car-images').upload(path, file, { upsert: true });
-  if (error) throw error;
-  const { data } = sbClient.storage.from('car-images').getPublicUrl(path);
-  return data.publicUrl;
-}
+async function uploadImageToStorage(file) { const ext = file.name.split('.').pop(); const path = `cars/${Date.now()}.${ext}`; const { error } = await sbClient.storage.from('car-images').upload(path, file, { upsert: true }); if (error) throw error; const { data } = sbClient.storage.from('car-images').getPublicUrl(path); return data.publicUrl; }
 
 let uploadedFile = null;
 function triggerUpload(e) { if(e) e.stopPropagation(); document.getElementById('fileInput').click(); }
 function onFileSelected(e) { const f=e.target.files[0]; if(f) previewFile(f); e.target.value=''; }
 function onDragOver(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('dragover'); }
 function onDragLeave() { document.getElementById('uploadZone').classList.remove('dragover'); }
-function onDrop(e) {
-  e.preventDefault(); document.getElementById('uploadZone').classList.remove('dragover');
-  const f=e.dataTransfer.files[0];
-  if(f && f.type.startsWith('image/')) previewFile(f); else showToast('กรุณาเลือกไฟล์รูปภาพ', true);
-}
-function previewFile(f) {
-  if(f.size > 5*1024*1024) { showToast('ไฟล์ใหญ่เกิน 5MB', true); return; }
-  uploadedFile = f;
-  const r = new FileReader(); r.onload = e => setPreview(e.target.result); r.readAsDataURL(f);
-}
-function setPreview(src) {
-  currentImgData = src;
-  const prev=document.getElementById('uploadPreview'), ph=document.getElementById('uploadPlaceholder'),
-        ov=document.getElementById('uploadOverlay'), z=document.getElementById('uploadZone');
-  prev.src=src; prev.classList.add('show'); ph.style.display='none';
-  ov.classList.add('has-img'); z.classList.add('has-image');
-}
-function removeImage(e) {
-  if(e) e.stopPropagation(); currentImgData=null; uploadedFile=null;
-  const prev=document.getElementById('uploadPreview'), ph=document.getElementById('uploadPlaceholder'),
-        ov=document.getElementById('uploadOverlay'), z=document.getElementById('uploadZone');
-  prev.src=''; prev.classList.remove('show'); ph.style.display='';
-  ov.classList.remove('has-img'); z.classList.remove('has-image');
-}
-function pickEmoji(el) {
-  document.querySelectorAll('.emoji-opt').forEach(x=>x.classList.remove('sel'));
-  el.classList.add('sel'); pickedEmoji=el.dataset.e;
-}
+function onDrop(e) { e.preventDefault(); document.getElementById('uploadZone').classList.remove('dragover'); const f=e.dataTransfer.files[0]; if(f && f.type.startsWith('image/')) previewFile(f); else showToast('กรุณาเลือกไฟล์รูปภาพ', true); }
+function previewFile(f) { if(f.size > 5*1024*1024) { showToast('ไฟล์ใหญ่เกิน 5MB', true); return; } uploadedFile = f; const r = new FileReader(); r.onload = e => setPreview(e.target.result); r.readAsDataURL(f); }
+function setPreview(src) { currentImgData = src; const prev=document.getElementById('uploadPreview'), ph=document.getElementById('uploadPlaceholder'), ov=document.getElementById('uploadOverlay'), z=document.getElementById('uploadZone'); prev.src=src; prev.classList.add('show'); ph.style.display='none'; ov.classList.add('has-img'); z.classList.add('has-image'); }
+function removeImage(e) { if(e) e.stopPropagation(); currentImgData=null; uploadedFile=null; const prev=document.getElementById('uploadPreview'), ph=document.getElementById('uploadPlaceholder'), ov=document.getElementById('uploadOverlay'), z=document.getElementById('uploadZone'); prev.src=''; prev.classList.remove('show'); ph.style.display=''; ov.classList.remove('has-img'); z.classList.remove('has-image'); }
+function pickEmoji(el) { document.querySelectorAll('.emoji-opt').forEach(x=>x.classList.remove('sel')); el.classList.add('sel'); pickedEmoji=el.dataset.e; }
 
-function renderCars() {
-  const g = document.getElementById('carGrid');
-  if(!CARS.length) { g.innerHTML='<p style="color:var(--muted);font-size:13px">'+(IS_CONFIGURED?'ยังไม่มีรุ่นรถ':'ยังไม่ได้เชื่อมต่อ DB')+'</p>'; return; }
-  g.innerHTML = CARS.map(c => `
-    <div class="car-card" id="car-${c.id}" onclick="selectCar('${c.id}')">
-      <div class="car-card-img">
-        ${c.image_url ? `<img src="${c.image_url}">` : `<span style="font-size:44px">${c.emoji}</span>`}
-        <div class="car-check"><i class="ti ti-check" style="font-size:11px;color:#fff"></i></div>
-      </div>
-      <div class="car-card-body">
-        <div class="car-name">${c.name}</div>
-        <div class="car-type">${c.type}</div>
-        <div class="car-price">฿${fmt(c.price)}</div>
-      </div>
-    </div>`).join('');
-}
+function renderCars() { const g = document.getElementById('carGrid'); if(!CARS.length) { g.innerHTML='<p style="color:var(--muted);font-size:13px">'+(IS_CONFIGURED?'ยังไม่มีรุ่นรถ':'ยังไม่ได้เชื่อมต่อ DB')+'</p>'; return; } g.innerHTML = CARS.map(c => ` <div class="car-card" id="car-${c.id}" onclick="selectCar('${c.id}')"> <div class="car-card-img"> ${c.image_url ? `<img src="${c.image_url}">` : `<span style="font-size:44px">${c.emoji}</span>`} <div class="car-check"><i class="ti ti-check" style="font-size:11px;color:#fff"></i></div> </div> <div class="car-card-body"> <div class="car-name">${c.name}</div> <div class="car-type">${c.type}</div> <div class="car-price">฿${fmt(c.price)}</div> </div> </div>`).join(''); }
+function selectCar(id) { CARS.forEach(c=>document.getElementById('car-'+c.id)?.classList.remove('selected')); selectedCar = CARS.find(c=>String(c.id)===String(id)); document.getElementById('car-'+id).classList.add('selected'); document.getElementById('selectedInfo').classList.add('show'); document.getElementById('selName').textContent = selectedCar.name; document.getElementById('selPrice').textContent = '฿'+fmt(selectedCar.price)+' | '+selectedCar.type; const t = document.getElementById('selThumb'); t.innerHTML = selectedCar.image_url ? `<img src="${selectedCar.image_url}" style="width:100%;height:100%;object-fit:cover">` : selectedCar.emoji; }
+function setType(el, t) { document.querySelectorAll('.type-tab').forEach(x=>x.classList.remove('active')); el.classList.add('active'); bookingType = t; }
 
-function selectCar(id) {
-  CARS.forEach(c=>document.getElementById('car-'+c.id)?.classList.remove('selected'));
-  selectedCar = CARS.find(c=>String(c.id)===String(id));
-  document.getElementById('car-'+id).classList.add('selected');
-  document.getElementById('selectedInfo').classList.add('show');
-  document.getElementById('selName').textContent = selectedCar.name;
-  document.getElementById('selPrice').textContent = '฿'+fmt(selectedCar.price)+' | '+selectedCar.type;
-  const t = document.getElementById('selThumb');
-  t.innerHTML = selectedCar.image_url ? `<img src="${selectedCar.image_url}" style="width:100%;height:100%;object-fit:cover">` : selectedCar.emoji;
-}
+async function submitBooking() { if (!IS_CONFIGURED) { showToast('กรุณาตั้งค่า Supabase ก่อน', true); return; } const name=document.getElementById('fName').value.trim(); const phone=document.getElementById('fPhone').value.trim(); const date=document.getElementById('fDate').value; if(!name||!phone||!date) { showToast('กรุณากรอกข้อมูลที่จำเป็น (ชื่อ, เบอร์โทร, วันที่)', true); return; } if(!selectedCar) { showToast('กรุณาเลือกรุ่นรถก่อน', true); return; } const btn = document.getElementById('submitBtn'); btn.disabled = true; showLoading('กำลังบันทึกการจอง...'); try { await dbSaveBooking({ car_id: selectedCar.id, car: selectedCar.name, name, phone, email: document.getElementById('fEmail').value, date, color: document.getElementById('fColor').value||'ไม่ระบุ', promotion: document.getElementById('fPromotion').value||null, finance: document.getElementById('fFinance').value||null, po_number: document.getElementById('fPO').value||null, po_expiry: document.getElementById('fPOExpiry').value||null, delivery_date: document.getElementById('fDelivery').value||null, note: document.getElementById('fNote').value, type: bookingType }); await loadBookings(); clearForm(); showToast('บันทึกการ'+bookingType+'เรียบร้อย!'); } catch(e) { showToast('บันทึกไม่สำเร็จ: '+e.message, true); } btn.disabled = false; hideLoading(); }
+function clearForm() { ['fName','fPhone','fEmail','fDate','fColor','fPromotion','fFinance','fPO','fPOExpiry','fDelivery','fNote'].forEach(id=>document.getElementById(id).value=''); selectedCar = null; document.querySelectorAll('.car-card').forEach(c=>c.classList.remove('selected')); document.getElementById('selectedInfo').classList.remove('show'); }
 
-function setType(el, t) {
-  document.querySelectorAll('.type-tab').forEach(x=>x.classList.remove('active'));
-  el.classList.add('active'); bookingType = t;
-}
+function updateAdminStats() { const total = bookings.length; const pending = bookings.filter(b=>b.status==='รอดำเนินการ').length; const approved = bookings.filter(b=>b.status==='อนุมัติแล้ว').length; document.getElementById('statTotal').textContent = total; document.getElementById('statPending').textContent = pending; document.getElementById('statApproved').textContent = approved; const val = bookings.filter(b=>b.status==='อนุมัติแล้ว').reduce((a,b)=>a+(b.carPrice||0),0); document.getElementById('statValue').textContent = (val/1e6).toFixed(2); renderCarStats(); }
+function renderTable(data) { allRows = data; const tbody = document.getElementById('bookingTable'); if(!data.length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--muted)">ยังไม่มีรายการจอง</td></tr>'; return; } tbody.innerHTML = data.map(b => { const dotCls = b.status==='อนุมัติแล้ว'?'sdot-ok':b.status==='ยกเลิก'?'sdot-no':'sdot-wait'; const dateStr = fmtDate(b.booking_date||b.date); return `<tr> <td style="font-weight:600;color:var(--navy);font-size:12px">${String(b.id).slice(0,8)}…</td> <td>${b.customer_name||b.name}<br><span style="font-size:11px;color:var(--muted)">${b.phone}</span></td> <td>${b.car||b.car_name}<br><span style="font-size:11px;color:var(--muted)">${b.color||''}</span></td> <td><span class="badge ${b.booking_type==='จอง'||b.type==='จอง'?'badge-info':'badge-success'}">${b.booking_type||b.type}</span></td> <td style="font-size:12px">${dateStr}</td> <td><span class="sdot ${dotCls}"></span>${b.status}</td> <td style="white-space:nowrap"> <button class="action-btn" onclick="approveBooking('${b.id}')">อนุมัติ</button> <button class="action-btn del" style="margin-left:4px" onclick="cancelBooking('${b.id}')">ยกเลิก</button> </td></tr>`; }).join(''); }
+function filterTable(q) { renderTable(q ? allRows.filter(b=>(b.customer_name||b.name||'').includes(q)||(b.car||b.car_name||'').includes(q)) : allRows); }
 
-async function submitBooking() {
-  if (!IS_CONFIGURED) { showToast('กรุณาตั้งค่า Supabase ก่อน', true); return; }
-  const name=document.getElementById('fName').value.trim();
-  const phone=document.getElementById('fPhone').value.trim();
-  const date=document.getElementById('fDate').value;
-  if(!name||!phone||date) { showToast('กรุณากรอกข้อมูลที่จำเป็น (ชื่อ, เบอร์โทร, วันที่)', true); return; }
-  if(!selectedCar) { showToast('กรุณาเลือกรุ่นรถก่อน', true); return; }
+async function approveBooking(id) { showLoading('กำลังอัปเดต...'); try { await dbUpdateStatus(id,'อนุมัติแล้ว'); await loadBookings(); showToast('อนุมัติเรียบร้อย'); } catch(e) { showToast('เกิดข้อผิดพลาด: '+e.message, true); } hideLoading(); }
+async function cancelBooking(id) { showLoading('กำลังอัปเดต...'); try { await dbUpdateStatus(id,'ยกเลิก'); await loadBookings(); showToast('ยกเลิกเรียบร้อย'); } catch(e) { showToast('เกิดข้อผิดพลาด: '+e.message, true); } hideLoading(); }
 
-  const btn = document.getElementById('submitBtn');
-  btn.disabled = true; showLoading('กำลังบันทึกการจอง...');
-  try {
-    await dbSaveBooking({
-      car_id: selectedCar.id, car: selectedCar.name,
-      name, phone, email: document.getElementById('fEmail').value,
-      date, color: document.getElementById('fColor').value||'ไม่ระบุ',
-      promotion: document.getElementById('fPromotion').value||null,
-      finance: document.getElementById('fFinance').value||null,
-      po_number: document.getElementById('fPO').value||null,
-      po_expiry: document.getElementById('fPOExpiry').value||null,
-      delivery_date: document.getElementById('fDelivery').value||null,
-      note: document.getElementById('fNote').value, type: bookingType
-    });
-    await loadBookings();
-    clearForm();
-    showToast('บันทึกการ'+bookingType+'เรียบร้อย!');
-  } catch(e) {
-    showToast('บันทึกไม่สำเร็จ: '+e.message, true);
-  }
-  btn.disabled = false; hideLoading();
-}
+function renderCarStats() { const stats = {}; bookings.forEach(b=>{ const n=b.car||b.car_name; if(n) stats[n]=(stats[n]||0)+1; }); const entries = Object.entries(stats).sort((a,b)=>b[1]-a[1]).slice(0,5); const max = entries[0]?.[1] || 1; document.getElementById('carStats').innerHTML = entries.length ? entries.map(([n,c])=>`<div class="progress-row"> <div class="progress-label"><span>${n}</span><span>${c} คัน</span></div> <div class="progress-bar"><div class="progress-fill" style="width:${(c/max)*100}%"></div></div> </div>`).join('') : '<p style="font-size:12px;color:var(--muted)">ยังไม่มีข้อมูล</p>'; }
+function exportCSV() { if(!bookings.length){showToast('ยังไม่มีรายการ',true);return;} const header=['รหัส','ชื่อ','เบอร์','อีเมล','รถ','ประเภท','สี','Promotion','Finance','เลขที่ PO','PO หมดอายุ','วันที่ส่งมอบ','วันที่จอง','สถานะ','หมายเหตุ']; const rows=bookings.map(b=>[ b.id, b.customer_name||b.name, b.phone, b.email||'', b.car||b.car_name, b.booking_type||b.type, b.color||'', b.promotion||'', b.finance||'', b.po_number||'', fmtDate(b.po_expiry)||'', fmtDate(b.delivery_date)||'', fmtDate(b.booking_date||b.date), b.status, b.note||'' ].map(v=>`"${String(v||'').replace(/"/g,'""')}"`)); const csv='﻿'+[header,...rows].map(r=>r.join(',')).join('
+'); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download='bookings_'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); showToast('ดาวน์โหลด CSV เรียบร้อย'); }
 
-function clearForm() {
-  ['fName','fPhone','fEmail','fDate','fColor','fPromotion','fFinance','fPO','fPOExpiry','fDelivery','fNote'].forEach(id=>document.getElementById(id).value='');
-  selectedCar = null;
-  document.querySelectorAll('.car-card').forEach(c=>c.classList.remove('selected'));
-  document.getElementById('selectedInfo').classList.remove('show');
-}
-
-function updateAdminStats() {
-  const total = bookings.length;
-  const pending = bookings.filter(b=>b.status==='รอดำเนินการ').length;
-  const approved = bookings.filter(b=>b.status==='อนุมัติแล้ว').length;
-  document.getElementById('statTotal').textContent = total;
-  document.getElementById('statPending').textContent = pending;
-  document.getElementById('statApproved').textContent = approved;
-  const val = bookings.filter(b=>b.status==='อนุมัติแล้ว').reduce((a,b)=>a+(b.carPrice||0),0);
-  document.getElementById('statValue').textContent = (val/1e6).toFixed(2);
-  renderCarStats();
-}
-
-function renderTable(data) {
-  allRows = data;
-  const tbody = document.getElementById('bookingTable');
-  if(!data.length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--muted)">ยังไม่มีรายการจอง</td></tr>'; return; }
-  tbody.innerHTML = data.map(b => {
-    const dotCls = b.status==='อนุมัติแล้ว'?'sdot-ok':b.status==='ยกเลิก'?'sdot-no':'sdot-wait';
-    const dateStr = fmtDate(b.booking_date||b.date);
-    return `<tr>
-      <td style="font-weight:600;color:var(--navy);font-size:12px">${String(b.id).slice(0,8)}…</td>
-      <td>${b.customer_name||b.name}<br><span style="font-size:11px;color:var(--muted)">${b.phone}</span></td>
-      <td>${b.car||b.car_name}<br><span style="font-size:11px;color:var(--muted)">${b.color||''}</span></td>
-      <td><span class="badge ${b.booking_type==='จอง'||b.type==='จอง'?'badge-info':'badge-success'}">${b.booking_type||b.type}</span></td>
-      <td style="font-size:12px">${dateStr}</td>
-      <td><span class="sdot ${dotCls}"></span>${b.status}</td>
-      <td style="white-space:nowrap">
-        <button class="action-btn" onclick="approveBooking('${b.id}')">อนุมัติ</button>
-        <button class="action-btn del" style="margin-left:4px" onclick="cancelBooking('${b.id}')">ยกเลิก</button>
-      </td></tr>`;
-  }).join('');
-}
-
-function filterTable(q) {
-  renderTable(q ? allRows.filter(b=>(b.customer_name||b.name||'').includes(q)||(b.car||b.car_name||'').includes(q)) : allRows);
-}
-
-async function approveBooking(id) {
-  showLoading('กำลังอัปเดต...');
-  try { await dbUpdateStatus(id,'อนุมัติแล้ว'); await loadBookings(); showToast('อนุมัติเรียบร้อย'); }
-  catch(e) { showToast('เกิดข้อผิดพลาด: '+e.message, true); }
-  hideLoading();
-}
-async function cancelBooking(id) {
-  showLoading('กำลังอัปเดต...');
-  try { await dbUpdateStatus(id,'ยกเลิก'); await loadBookings(); showToast('ยกเลิกเรียบร้อย'); }
-  catch(e) { showToast('เกิดข้อผิดพลาด: '+e.message, true); }
-  hideLoading();
-}
-
-function renderCarStats() {
-  const stats = {};
-  bookings.forEach(b=>{ const n=b.car||b.car_name; if(n) stats[n]=(stats[n]||0)+1; });
-  const entries = Object.entries(stats).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const max = entries[0]?.[1] || 1;
-  document.getElementById('carStats').innerHTML = entries.length
-    ? entries.map(([n,c])=>`<div class="progress-row">
-        <div class="progress-label"><span>${n}</span><span>${c} คัน</span></div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${(c/max)*100}%"></div></div>
-      </div>`).join('')
-    : '<p style="font-size:12px;color:var(--muted)">ยังไม่มีข้อมูล</p>';
-}
-
-function exportCSV() {
-  if(!bookings.length){showToast('ยังไม่มีรายการ',true);return;}
-  const header=['รหัส','ชื่อ','เบอร์','อีเมล','รถ','ประเภท','สี','Promotion','Finance','เลขที่ PO','PO หมดอายุ','วันที่ส่งมอบ','วันที่จอง','สถานะ','หมายเหตุ'];
-  const rows=bookings.map(b=>[
-    b.id, b.customer_name||b.name, b.phone, b.email||'',
-    b.car||b.car_name, b.booking_type||b.type, b.color||'',
-    b.promotion||'', b.finance||'', b.po_number||'',
-    fmtDate(b.po_expiry)||'', fmtDate(b.delivery_date)||'',
-    fmtDate(b.booking_date||b.date), b.status, b.note||''
-  ].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));
-  const csv='﻿'+[header,...rows].map(r=>r.join(',')).join('
-');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  a.download='bookings_'+new Date().toISOString().slice(0,10)+'.csv';
-  a.click(); showToast('ดาวน์โหลด CSV เรียบร้อย');
-}
-
-function renderCarMgmt() {
-  const list = document.getElementById('carMgmtList');
-  document.getElementById('carCount').textContent='('+CARS.length+' รุ่น)';
-  if(!CARS.length) { list.innerHTML='<div class="empty-state"><i class="ti ti-car-off"></i>ยังไม่มีรุ่นรถ<br>เพิ่มรุ่นรถแรกด้านขวา</div>'; return; }
-  list.innerHTML = CARS.map(c=>`
-    <div class="car-mgmt-item">
-      <div class="car-thumb">
-        ${c.image_url ? `<img src="${c.image_url}">` : `<span style="font-size:22px">${c.emoji}</span>`}
-      </div>
-      <div class="car-mgmt-info">
-        <div class="car-mgmt-name">${c.name}</div>
-        <div class="car-mgmt-meta">${c.type}</div>
-        <div class="car-mgmt-price">฿${fmt(c.price)}</div>
-      </div>
-      <div class="car-mgmt-actions">
-        <button class="action-btn" onclick="startEdit('${c.id}')" title="แก้ไข"><i class="ti ti-edit"></i></button>
-        <button class="action-btn del" onclick="confirmDelete('${c.id}')" title="ลบ"><i class="ti ti-trash"></i></button>
-      </div>
-    </div>`).join('');
-}
-
-async function saveCar() {
-  if (!IS_CONFIGURED) { showToast('กรุณาตั้งค่า Supabase ก่อน', true); return; }
-  const name=document.getElementById('cfName').value.trim();
-  const type=document.getElementById('cfType').value;
-  const price=parseInt(document.getElementById('cfPrice').value);
-  if(!name||!price||price<1) { showToast('กรุณากรอกชื่อรุ่นและราคาให้ถูกต้อง', true); return; }
-
-  document.getElementById('saveCarBtn').disabled = true;
-  showLoading('กำลังบันทึก...');
-
-  try {
-    let image_url = editingCarId ? CARS.find(c=>String(c.id)===String(editingCarId))?.image_url : null;
-
-    if (uploadedFile) {
-      try { image_url = await uploadImageToStorage(uploadedFile); }
-      catch(e) { image_url = currentImgData; }
-    } else if (!currentImgData) {
-      image_url = null;
-    }
-
-    await dbSaveCar({ id: editingCarId||null, name, type, price, emoji: pickedEmoji, image_url });
-    await loadCars();
-    showToast(editingCarId ? 'แก้ไขรุ่นรถเรียบร้อย' : 'เพิ่มรุ่นรถเรียบร้อย: '+name);
-    cancelEdit();
-  } catch(e) {
-    showToast('บันทึกไม่สำเร็จ: '+e.message, true);
-  }
-  document.getElementById('saveCarBtn').disabled = false; hideLoading();
-}
-
-function startEdit(id) {
-  const c = CARS.find(x=>String(x.id)===String(id)); if(!c) return;
-  editingCarId = id;
-  document.getElementById('cfName').value = c.name;
-  document.getElementById('cfType').value = c.type;
-  document.getElementById('cfPrice').value = c.price;
-  pickedEmoji = c.emoji;
-  document.querySelectorAll('.emoji-opt').forEach(el=>el.classList.toggle('sel',el.dataset.e===c.emoji));
-  if(c.image_url) setPreview(c.image_url); else removeImage();
-  uploadedFile = null; 
-  document.getElementById('formModeLabel').textContent='แก้ไขรุ่นรถ';
-  document.getElementById('formIcon').className='ti ti-edit';
-  document.getElementById('saveBtnLabel').textContent='บันทึกการแก้ไข';
-  document.getElementById('cancelEditBtn').style.display='block';
-}
-function cancelEdit() {
-  editingCarId=null; pickedEmoji='🚗'; currentImgData=null; uploadedFile=null;
-  document.getElementById('cfName').value=''; document.getElementById('cfPrice').value=''; removeImage();
-  document.querySelectorAll('.emoji-opt').forEach((el,i)=>el.classList.toggle('sel',i===0));
-  document.getElementById('formModeLabel').textContent='เพิ่มรุ่นรถใหม่';
-  document.getElementById('formIcon').className='ti ti-plus';
-  document.getElementById('saveBtnLabel').textContent='บันทึกรถใหม่';
-  document.getElementById('cancelEditBtn').style.display='none';
-}
-function confirmDelete(id) {
-  const c=CARS.find(x=>String(x.id)===String(id)); if(!c) return;
-  document.getElementById('modalBody').textContent='ลบ "'+c.name+'" ออกจากระบบ? รายการจองที่มีอยู่จะยังคงอยู่';
-  document.getElementById('confirmModal').classList.add('show');
-  document.getElementById('modalConfirmBtn').onclick = async () => {
-    closeModal(); showLoading('กำลังลบ...');
-    try { await dbDeleteCar(id); await loadCars(); showToast('ลบรุ่นรถเรียบร้อย'); }
-    catch(e) { showToast('ลบไม่สำเร็จ: '+e.message, true); }
-    hideLoading();
-  };
-}
+function renderCarMgmt() { const list = document.getElementById('carMgmtList'); document.getElementById('carCount').textContent='('+CARS.length+' รุ่น)'; if(!CARS.length) { list.innerHTML='<div class="empty-state"><i class="ti ti-car-off"></i>ยังไม่มีรุ่นรถ<br>เพิ่มรุ่นรถแรกด้านขวา</div>'; return; } list.innerHTML = CARS.map(c=>` <div class="car-mgmt-item"> <div class="car-thumb"> ${c.image_url ? `<img src="${c.image_url}">` : `<span style="font-size:22px">${c.emoji}</span>`} </div> <div class="car-mgmt-info"> <div class="car-mgmt-name">${c.name}</div> <div class="car-mgmt-meta">${c.type}</div> <div class="car-mgmt-price">฿${fmt(c.price)}</div> </div> <div class="car-mgmt-actions"> <button class="action-btn" onclick="startEdit('${c.id}')" title="แก้ไข"><i class="ti ti-edit"></i></button> <button class="action-btn del" onclick="confirmDelete('${c.id}')" title="ลบ"><i class="ti ti-trash"></i></button> </div> </div>`).join(''); }
+async function saveCar() { if (!IS_CONFIGURED) { showToast('กรุณาตั้งค่า Supabase ก่อน', true); return; } const name=document.getElementById('cfName').value.trim(); const type=document.getElementById('cfType').value; const price=parseInt(document.getElementById('cfPrice').value); if(!name||!price||price<1) { showToast('กรุณากรอกชื่อรุ่นและราคาให้ถูกต้อง', true); return; } document.getElementById('saveCarBtn').disabled = true; showLoading('กำลังบันทึก...'); try { let image_url = editingCarId ? CARS.find(c=>String(c.id)===String(editingCarId))?.image_url : null; if (uploadedFile) { try { image_url = await uploadImageToStorage(uploadedFile); } catch(e) { image_url = currentImgData; } } else if (!currentImgData) { image_url = null; } await dbSaveCar({ id: editingCarId||null, name, type, price, emoji: pickedEmoji, image_url }); await loadCars(); showToast(editingCarId ? 'แก้ไขรุ่นรถเรียบร้อย' : 'เพิ่มรุ่นรถเรียบร้อย: '+name); cancelEdit(); } catch(e) { showToast('บันทึกไม่สำเร็จ: '+e.message, true); } document.getElementById('saveCarBtn').disabled = false; hideLoading(); }
+function startEdit(id) { const c = CARS.find(x=>String(x.id)===String(id)); if(!c) return; editingCarId = id; document.getElementById('cfName').value = c.name; document.getElementById('cfType').value = c.type; document.getElementById('cfPrice').value = c.price; pickedEmoji = c.emoji; document.querySelectorAll('.emoji-opt').forEach(el=>el.classList.toggle('sel',el.dataset.e===c.emoji)); if(c.image_url) setPreview(c.image_url); else removeImage(); uploadedFile = null; document.getElementById('formModeLabel').textContent='แก้ไขรุ่นรถ'; document.getElementById('formIcon').className='ti ti-edit'; document.getElementById('saveBtnLabel').textContent='บันทึกการแก้ไข'; document.getElementById('cancelEditBtn').style.display='block'; }
+function cancelEdit() { editingCarId=null; pickedEmoji='🚗'; currentImgData=null; uploadedFile=null; document.getElementById('cfName').value=''; document.getElementById('cfPrice').value=''; removeImage(); document.querySelectorAll('.emoji-opt').forEach((el,i)=>el.classList.toggle('sel',i===0)); document.getElementById('formModeLabel').textContent='เพิ่มรุ่นรถใหม่'; document.getElementById('formIcon').className='ti ti-plus'; document.getElementById('saveBtnLabel').textContent='บันทึกรถใหม่'; document.getElementById('cancelEditBtn').style.display='none'; }
+function confirmDelete(id) { const c=CARS.find(x=>String(x.id)===String(id)); if(!c) return; document.getElementById('modalBody').textContent='ลบ "'+c.name+'" ออกจากระบบ? รายการจองที่มีอยู่จะยังคงอยู่'; document.getElementById('confirmModal').classList.add('show'); document.getElementById('modalConfirmBtn').onclick = async () => { closeModal(); showLoading('กำลังลบ...'); try { await dbDeleteCar(id); await loadCars(); showToast('ลบรุ่นรถเรียบร้อย'); } catch(e) { showToast('ลบไม่สำเร็จ: '+e.message, true); } hideLoading(); }; }
 function closeModal() { document.getElementById('confirmModal').classList.remove('show'); }
 
-// ── NAV ──
-function switchPage(p, el) {
-  // 👉 แก้ไข: ปิดการเช็กสิทธิ์แอดมิน เพื่อให้สามารถกดเข้าหน้าแอดมินได้เลย
-  // if(p==='admin' && currentRole!=='admin'){showToast('คุณไม่มีสิทธิ์เข้าถึงหน้า Admin',true);return;}
-  
-  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
-  document.getElementById('page-'+p).classList.add('active'); el.classList.add('active');
-  if(p==='admin') { updateAdminStats(); renderCarMgmt(); }
-}
-function switchSub(s, el) {
-  document.querySelectorAll('.sub-page').forEach(x=>x.classList.remove('active'));
-  document.querySelectorAll('.sub-tab').forEach(x=>x.classList.remove('active'));
-  document.getElementById('sub-'+s).classList.add('active'); el.classList.add('active');
-  if(s==='cars') renderCarMgmt();
-  if(s==='orders') { updateAdminStats(); renderTable(bookings); }
-}
+function switchPage(p, el) { document.querySelectorAll('.page').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active')); document.getElementById('page-'+p).classList.add('active'); el.classList.add('active'); if(p==='admin') { updateAdminStats(); renderCarMgmt(); } }
+function switchSub(s, el) { document.querySelectorAll('.sub-page').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.sub-tab').forEach(x=>x.classList.remove('active')); document.getElementById('sub-'+s).classList.add('active'); el.classList.add('active'); if(s==='cars') renderCarMgmt(); if(s==='orders') { updateAdminStats(); renderTable(bookings); } }
 
 let toastTimer;
-function showToast(msg, isError=false) {
-  const t=document.getElementById('toast');
-  document.getElementById('toastMsg').textContent=msg;
-  document.getElementById('toastIcon').className='ti '+(isError?'ti-alert-triangle':'ti-circle-check');
-  t.className='toast show'+(isError?' error':'');
-  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),4000);
-}
+function showToast(msg, isError=false) { const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; document.getElementById('toastIcon').className='ti '+(isError?'ti-alert-triangle':'ti-circle-check'); t.className='toast show'+(isError?' error':''); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),4000); }
 </script>
 </body>
 </html>
