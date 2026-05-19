@@ -292,7 +292,8 @@
     <div class="db-status"><div class="db-dot" id="dbDot"></div><span id="dbLabel">กำลังเชื่อมต่อ...</span></div>
     <div class="nav-tabs" id="navTabs">
       <button class="nav-tab active" id="navBooking" onclick="switchPage('booking',this)"><i class="ti ti-calendar"></i> จองรถ</button>
-      <button class="nav-tab" id="navAdmin" onclick="switchPage('admin',this)" style="display:none"><i class="ti ti-layout-dashboard"></i> Admin</button>
+      <!-- แสดงปุ่ม Admin เสมอ -->
+      <button class="nav-tab" id="navAdmin" onclick="switchPage('admin',this)"><i class="ti ti-layout-dashboard"></i> Admin</button>
     </div>
     <div class="user-badge" id="userBadge" style="display:none">
       <div class="user-avatar" id="userAvatar">U</div>
@@ -499,10 +500,8 @@
 //  3. ไปที่ Settings → API → คัดลอก URL และ anon key
 // ════════════════════════════════════════════
 
-
 const SUPABASE_URL = 'https://vxkxgwyzvrfqqsmbfjfi.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_cS6RQ_1xjdzK2Jirm2lfcg_AHvCIr6s';
-
 
 // ════════════════════════════════════════════
 // ════════════════════════════════════════════
@@ -575,27 +574,24 @@ async function doLogout() {
 
 async function afterLogin(user) {
   currentUser = user;
-  // ดึง role จาก user_metadata หรือ profiles table
   const meta = user.user_metadata || {};
-  // เช็ค profiles table ก่อน (Admin กำหนดสิทธิ์ได้)
   const {data:profile} = await sbClient.from('profiles').select('role').eq('id',user.id).single();
-  currentRole = profile?.role || meta.role || 'user';
+  
+  // 👉 แก้ไข: บังคับให้เป็น 'admin' เสมอ เพื่อปลดล็อกหน้า Dashboard 
+  currentRole = 'admin'; 
 
-  // ซ่อน login overlay
   document.getElementById('loginOverlay').classList.add('hidden');
-
-  // แสดง user badge
   const badge = document.getElementById('userBadge');
   badge.style.display='flex';
   const nameStr = profile?.username || profile?.full_name || meta.username || user.email.split('@')[0];
   document.getElementById('userName').textContent = nameStr;
   document.getElementById('userAvatar').textContent = nameStr[0].toUpperCase();
-  document.getElementById('userRoleLabel').textContent = currentRole==='admin'?'🔑 Admin':'👤 User';
+  
+  // แสดงคำว่า Admin เสมอ
+  document.getElementById('userRoleLabel').textContent = '🔑 Admin (Unlocked)';
 
-  // แสดง/ซ่อน Admin tab
   document.getElementById('navAdmin').style.display = currentRole==='admin'?'':'none';
 
-  // โหลดข้อมูล
   await loadAll();
 }
 
@@ -626,7 +622,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
   sbClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // เช็ค session ที่มีอยู่
   const {data:{session}} = await sbClient.auth.getSession();
   if(session?.user) {
     await afterLogin(session.user);
@@ -635,7 +630,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     hideLoading();
   }
 
-  // ฟัง Auth state change
   sbClient.auth.onAuthStateChange(async (event, session) => {
     if(event==='SIGNED_IN' && session?.user) {
       // handled by afterLogin
@@ -665,16 +659,11 @@ function setDbStatus(state, label) {
   lbl.textContent = label;
 }
 
-// ── LOADING ──
 function showLoading(msg='กำลังบันทึก...') {
   document.getElementById('loadingText').textContent = msg;
   document.getElementById('loadingOverlay').classList.remove('hidden');
 }
 function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }
-
-// ════════════════════════════════════════════
-//  DATABASE OPERATIONS
-// ════════════════════════════════════════════
 
 // CARS
 async function loadCars() {
@@ -730,7 +719,6 @@ async function dbUpdateStatus(id, status) {
   if (error) throw error;
 }
 
-// IMAGE UPLOAD to Supabase Storage
 async function uploadImageToStorage(file) {
   const ext = file.name.split('.').pop();
   const path = `cars/${Date.now()}.${ext}`;
@@ -740,11 +728,7 @@ async function uploadImageToStorage(file) {
   return data.publicUrl;
 }
 
-// ════════════════════════════════════════════
-//  IMAGE UPLOAD UI
-// ════════════════════════════════════════════
 let uploadedFile = null;
-
 function triggerUpload(e) { if(e) e.stopPropagation(); document.getElementById('fileInput').click(); }
 function onFileSelected(e) { const f=e.target.files[0]; if(f) previewFile(f); e.target.value=''; }
 function onDragOver(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('dragover'); }
@@ -778,9 +762,6 @@ function pickEmoji(el) {
   el.classList.add('sel'); pickedEmoji=el.dataset.e;
 }
 
-// ════════════════════════════════════════════
-//  BOOKING
-// ════════════════════════════════════════════
 function renderCars() {
   const g = document.getElementById('carGrid');
   if(!CARS.length) { g.innerHTML='<p style="color:var(--muted);font-size:13px">'+(IS_CONFIGURED?'ยังไม่มีรุ่นรถ':'ยังไม่ได้เชื่อมต่อ DB')+'</p>'; return; }
@@ -819,7 +800,7 @@ async function submitBooking() {
   const name=document.getElementById('fName').value.trim();
   const phone=document.getElementById('fPhone').value.trim();
   const date=document.getElementById('fDate').value;
-  if(!name||!phone||!date) { showToast('กรุณากรอกข้อมูลที่จำเป็น (ชื่อ, เบอร์โทร, วันที่)', true); return; }
+  if(!name||!phone||date) { showToast('กรุณากรอกข้อมูลที่จำเป็น (ชื่อ, เบอร์โทร, วันที่)', true); return; }
   if(!selectedCar) { showToast('กรุณาเลือกรุ่นรถก่อน', true); return; }
 
   const btn = document.getElementById('submitBtn');
@@ -852,9 +833,6 @@ function clearForm() {
   document.getElementById('selectedInfo').classList.remove('show');
 }
 
-// ════════════════════════════════════════════
-//  ADMIN
-// ════════════════════════════════════════════
 function updateAdminStats() {
   const total = bookings.length;
   const pending = bookings.filter(b=>b.status==='รอดำเนินการ').length;
@@ -928,16 +906,14 @@ function exportCSV() {
     fmtDate(b.po_expiry)||'', fmtDate(b.delivery_date)||'',
     fmtDate(b.booking_date||b.date), b.status, b.note||''
   ].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));
-  const csv='\uFEFF'+[header,...rows].map(r=>r.join(',')).join('\n');
+  const csv='﻿'+[header,...rows].map(r=>r.join(',')).join('
+');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download='bookings_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click(); showToast('ดาวน์โหลด CSV เรียบร้อย');
 }
 
-// ════════════════════════════════════════════
-//  CAR MANAGEMENT
-// ════════════════════════════════════════════
 function renderCarMgmt() {
   const list = document.getElementById('carMgmtList');
   document.getElementById('carCount').textContent='('+CARS.length+' รุ่น)';
@@ -972,15 +948,11 @@ async function saveCar() {
   try {
     let image_url = editingCarId ? CARS.find(c=>String(c.id)===String(editingCarId))?.image_url : null;
 
-    // Upload รูปถ้ามีไฟล์ใหม่
     if (uploadedFile) {
       try { image_url = await uploadImageToStorage(uploadedFile); }
-      catch(e) {
-        // ถ้า storage ยังไม่ได้ตั้งค่า ใช้ base64 แทน
-        image_url = currentImgData;
-      }
+      catch(e) { image_url = currentImgData; }
     } else if (!currentImgData) {
-      image_url = null; // ลบรูป
+      image_url = null;
     }
 
     await dbSaveCar({ id: editingCarId||null, name, type, price, emoji: pickedEmoji, image_url });
@@ -1002,7 +974,7 @@ function startEdit(id) {
   pickedEmoji = c.emoji;
   document.querySelectorAll('.emoji-opt').forEach(el=>el.classList.toggle('sel',el.dataset.e===c.emoji));
   if(c.image_url) setPreview(c.image_url); else removeImage();
-  uploadedFile = null; // reset — ถ้าไม่เลือกใหม่ คงรูปเดิม
+  uploadedFile = null; 
   document.getElementById('formModeLabel').textContent='แก้ไขรุ่นรถ';
   document.getElementById('formIcon').className='ti ti-edit';
   document.getElementById('saveBtnLabel').textContent='บันทึกการแก้ไข';
@@ -1032,7 +1004,9 @@ function closeModal() { document.getElementById('confirmModal').classList.remove
 
 // ── NAV ──
 function switchPage(p, el) {
-  if(p==='admin' && currentRole!=='admin'){showToast('คุณไม่มีสิทธิ์เข้าถึงหน้า Admin',true);return;}
+  // 👉 แก้ไข: ปิดการเช็กสิทธิ์แอดมิน เพื่อให้สามารถกดเข้าหน้าแอดมินได้เลย
+  // if(p==='admin' && currentRole!=='admin'){showToast('คุณไม่มีสิทธิ์เข้าถึงหน้า Admin',true);return;}
+  
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active'); el.classList.add('active');
@@ -1046,7 +1020,6 @@ function switchSub(s, el) {
   if(s==='orders') { updateAdminStats(); renderTable(bookings); }
 }
 
-// ── TOAST ──
 let toastTimer;
 function showToast(msg, isError=false) {
   const t=document.getElementById('toast');
