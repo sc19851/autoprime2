@@ -245,8 +245,8 @@
     <!-- LOGIN FORM -->
     <div id="loginForm">
       <div class="login-form-row">
-        <label class="login-label">อีเมล</label>
-        <input class="login-input" id="lEmail" type="email" placeholder="email@example.com" onkeydown="if(event.key==='Enter')doLogin()">
+        <label class="login-label"><i class="ti ti-user"></i> Username</label>
+        <input class="login-input" id="lUsername" type="text" placeholder="กรอก Username" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
       <div class="login-form-row">
         <label class="login-label">รหัสผ่าน</label>
@@ -261,6 +261,10 @@
       <div class="login-form-row">
         <label class="login-label">ชื่อ-นามสกุล</label>
         <input class="login-input" id="rName" type="text" placeholder="กรอกชื่อเต็ม">
+      </div>
+      <div class="login-form-row">
+        <label class="login-label">Username * (a-z, 0-9, _)</label>
+        <input class="login-input" id="rUsername" type="text" placeholder="ตั้ง Username">
       </div>
       <div class="login-form-row">
         <label class="login-label">อีเมล</label>
@@ -342,6 +346,13 @@
             <option>ขาวมุก</option><option>ดำ</option><option>เงิน</option><option>แดง</option><option>น้ำเงิน</option><option>เทา</option>
           </select>
         </div>
+        <div class="form-row"><label class="form-label">Promotion</label><input class="form-input" id="fPromotion" type="text" placeholder="รหัสหรือชื่อโปรโมชัน"></div>
+        <div class="form-row"><label class="form-label">Finance (บริษัทไฟแนนซ์)</label><input class="form-input" id="fFinance" type="text" placeholder="เช่น กรุงศรี, ธ.กสิกร"></div>
+        <div class="form-2col">
+          <div class="form-row"><label class="form-label">เลขที่ PO</label><input class="form-input" id="fPO" type="text" placeholder="PO-XXXX"></div>
+          <div class="form-row"><label class="form-label">วันที่ PO หมดอายุ</label><input class="form-input" id="fPOExpiry" type="date"></div>
+        </div>
+        <div class="form-row"><label class="form-label">วันที่ส่งมอบ</label><input class="form-input" id="fDelivery" type="date"></div>
         <div class="form-row"><label class="form-label">หมายเหตุ</label><textarea class="form-input" id="fNote" rows="2" style="resize:none" placeholder="ข้อมูลเพิ่มเติม..."></textarea></div>
         <button class="submit-btn" id="submitBtn" onclick="submitBooking()"><i class="ti ti-send"></i> ยืนยันการจอง</button>
       </div>
@@ -381,7 +392,7 @@
             </div>
             <div style="overflow-x:auto">
               <table>
-                <thead><tr><th>รหัส</th><th>ลูกค้า</th><th>รถ</th><th>ประเภท</th><th>วันที่</th><th>สถานะ</th><th>ดำเนินการ</th></tr></thead>
+                <thead><tr><th>รหัส</th><th>ลูกค้า</th><th>รถ</th><th>ประเภท</th><th>Promotion</th><th>Finance</th><th>PO/หมดอายุ</th><th>ส่งมอบ</th><th>วันที่จอง</th><th>สถานะ</th><th>ดำเนินการ</th></tr></thead>
                 <tbody id="bookingTable"><tr><td colspan="7" style="text-align:center;padding:36px;color:var(--muted)">กำลังโหลด...</td></tr></tbody>
               </table>
             </div>
@@ -509,38 +520,43 @@ function setLoginMode(mode, el) {
 }
 
 async function doLogin() {
-  const email = document.getElementById('lEmail').value.trim();
+  const username = document.getElementById('lUsername').value.trim();
   const pass  = document.getElementById('lPassword').value;
   const btn   = document.getElementById('loginBtn');
   const err   = document.getElementById('loginErr');
-  if(!email||!pass){showLoginErr(err,'กรุณากรอกอีเมลและรหัสผ่าน');return;}
+  if(!username||!pass){showLoginErr(err,'กรุณากรอก Username และรหัสผ่าน');return;}
   btn.disabled=true; btn.textContent='กำลังเข้าสู่ระบบ...';
   try {
-    const {data,error} = await sbClient.auth.signInWithPassword({email,password:pass});
+    const {data:prof,error:pErr} = await sbClient.from('profiles').select('email').eq('username',username).single();
+    if(pErr||!prof){showLoginErr(err,'ไม่พบ Username นี้ในระบบ');btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> เข้าสู่ระบบ';return;}
+    const {data,error} = await sbClient.auth.signInWithPassword({email:prof.email,password:pass});
     if(error) throw error;
     await afterLogin(data.user);
   } catch(e) {
-    showLoginErr(err, e.message==='Invalid login credentials'?'อีเมลหรือรหัสผ่านไม่ถูกต้อง':e.message);
+    showLoginErr(err, e.message==='Invalid login credentials'?'Username หรือรหัสผ่านไม่ถูกต้อง':e.message);
   }
   btn.disabled=false; btn.innerHTML='<i class="ti ti-login"></i> เข้าสู่ระบบ';
 }
 
 async function doRegister() {
-  const name  = document.getElementById('rName').value.trim();
+  const name     = document.getElementById('rName').value.trim();
+  const username = document.getElementById('rUsername').value.trim().toLowerCase();
   const email = document.getElementById('rEmail').value.trim();
   const pass  = document.getElementById('rPassword').value;
   const btn   = document.getElementById('registerBtn');
   const err   = document.getElementById('registerErr');
-  if(!name||!email||!pass){showLoginErr(err,'กรุณากรอกข้อมูลให้ครบ');return;}
+  if(!name||!username||!email||!pass){showLoginErr(err,'กรุณากรอกข้อมูลให้ครบ');return;}
+  if(!/^[a-z0-9_]+$/.test(username)){showLoginErr(err,'Username ใช้ได้เฉพาะ a-z, 0-9, _ เท่านั้น');return;}
   if(pass.length<6){showLoginErr(err,'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');return;}
   btn.disabled=true; btn.textContent='กำลังสมัคร...';
   try {
     const {data,error} = await sbClient.auth.signUp({
       email, password:pass,
-      options:{data:{full_name:name, role:'user'}}
+      options:{data:{full_name:name, username, role:'user'}}
     });
     if(error) throw error;
-    showLoginErr(err,'✅ สมัครสมาชิกสำเร็จ! กรุณาตรวจสอบอีเมลเพื่อยืนยัน แล้วกลับมา Login','#D1FAE5','#065F46');
+    if(data.user) await sbClient.from('profiles').update({username,full_name:name}).eq('id',data.user.id);
+    showLoginErr(err,'✅ สมัครสำเร็จ! Login ด้วย Username ได้เลย','#D1FAE5','#065F46');
   } catch(e) {
     showLoginErr(err, e.message);
   }
@@ -571,7 +587,7 @@ async function afterLogin(user) {
   // แสดง user badge
   const badge = document.getElementById('userBadge');
   badge.style.display='flex';
-  const nameStr = meta.full_name || user.email.split('@')[0];
+  const nameStr = profile?.username || profile?.full_name || meta.username || user.email.split('@')[0];
   document.getElementById('userName').textContent = nameStr;
   document.getElementById('userAvatar').textContent = nameStr[0].toUpperCase();
   document.getElementById('userRoleLabel').textContent = currentRole==='admin'?'🔑 Admin':'👤 User';
@@ -595,6 +611,7 @@ let selectedCar = null, bookingType = 'จอง';
 let editingCarId = null, pickedEmoji = '🚗', currentImgData = null;
 
 const fmt = n => Number(n).toLocaleString('th-TH');
+const fmtDate = d => { if(!d||d==='—') return d||'—'; try { const p=String(d).split('T')[0].split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; } catch(e){return d;} };
 const now = () => new Date().toLocaleString('th-TH', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
 
 // ── INIT ──
@@ -700,6 +717,9 @@ async function dbSaveBooking(b) {
     car_id: b.car_id, car_name: b.car,
     customer_name: b.name, phone: b.phone, email: b.email,
     booking_date: b.date, color: b.color, note: b.note,
+    promotion: b.promotion||null, finance: b.finance||null,
+    po_number: b.po_number||null, po_expiry: b.po_expiry||null,
+    delivery_date: b.delivery_date||null,
     booking_type: b.type, status: 'รอดำเนินการ'
   });
   if (error) throw error;
@@ -809,6 +829,11 @@ async function submitBooking() {
       car_id: selectedCar.id, car: selectedCar.name,
       name, phone, email: document.getElementById('fEmail').value,
       date, color: document.getElementById('fColor').value||'ไม่ระบุ',
+      promotion: document.getElementById('fPromotion').value||null,
+      finance: document.getElementById('fFinance').value||null,
+      po_number: document.getElementById('fPO').value||null,
+      po_expiry: document.getElementById('fPOExpiry').value||null,
+      delivery_date: document.getElementById('fDelivery').value||null,
       note: document.getElementById('fNote').value, type: bookingType
     });
     await loadBookings();
@@ -821,7 +846,7 @@ async function submitBooking() {
 }
 
 function clearForm() {
-  ['fName','fPhone','fEmail','fDate','fColor','fNote'].forEach(id=>document.getElementById(id).value='');
+  ['fName','fPhone','fEmail','fDate','fColor','fPromotion','fFinance','fPO','fPOExpiry','fDelivery','fNote'].forEach(id=>document.getElementById(id).value='');
   selectedCar = null;
   document.querySelectorAll('.car-card').forEach(c=>c.classList.remove('selected'));
   document.getElementById('selectedInfo').classList.remove('show');
@@ -848,7 +873,7 @@ function renderTable(data) {
   if(!data.length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--muted)">ยังไม่มีรายการจอง</td></tr>'; return; }
   tbody.innerHTML = data.map(b => {
     const dotCls = b.status==='อนุมัติแล้ว'?'sdot-ok':b.status==='ยกเลิก'?'sdot-no':'sdot-wait';
-    const dateStr = b.booking_date || b.date || '—';
+    const dateStr = fmtDate(b.booking_date||b.date);
     return `<tr>
       <td style="font-weight:600;color:var(--navy);font-size:12px">${String(b.id).slice(0,8)}…</td>
       <td>${b.customer_name||b.name}<br><span style="font-size:11px;color:var(--muted)">${b.phone}</span></td>
@@ -895,11 +920,13 @@ function renderCarStats() {
 
 function exportCSV() {
   if(!bookings.length){showToast('ยังไม่มีรายการ',true);return;}
-  const header=['รหัส','ชื่อ','เบอร์','อีเมล','รถ','ประเภท','สี','วันที่','สถานะ','หมายเหตุ'];
+  const header=['รหัส','ชื่อ','เบอร์','อีเมล','รถ','ประเภท','สี','Promotion','Finance','เลขที่ PO','PO หมดอายุ','วันที่ส่งมอบ','วันที่จอง','สถานะ','หมายเหตุ'];
   const rows=bookings.map(b=>[
     b.id, b.customer_name||b.name, b.phone, b.email||'',
     b.car||b.car_name, b.booking_type||b.type, b.color||'',
-    b.booking_date||b.date, b.status, b.note||''
+    b.promotion||'', b.finance||'', b.po_number||'',
+    fmtDate(b.po_expiry)||'', fmtDate(b.delivery_date)||'',
+    fmtDate(b.booking_date||b.date), b.status, b.note||''
   ].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));
   const csv='\uFEFF'+[header,...rows].map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');
